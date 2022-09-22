@@ -9,7 +9,7 @@ local probs
 function init()
   params:add_separator("Kickbox")
   local specs = {
-    ["div"] = controlspec.new(1, 8, "lin", 1, 4, ""),
+    ["div"] = controlspec.new(1, 8, "lin", 1, 2, ""),
     ["click_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
     ["click_mod_sweep"] = controlspec.new(0, 10, "lin", 0, 0, ""),
     ["click_mod_mod_sweep"] = controlspec.new(0, 10, "lin", 0, 0, ""),
@@ -108,7 +108,8 @@ function init()
     update_scaled_param("kickbox_engine_click_feedback", "Kickbox_click_mod_feedback", "Kickbox_click_mod_amt")
   end)
 
-  probs = s{1, s{1, 0.25, 0.75, 0.125, 0.5} } 
+  -- probs = s{1, s{1, 0.25, 0.75, 0.125, 0.5} } 
+  probs = s{1}
   playing = false
   sequence = clock.run(
     function()
