@@ -22,7 +22,9 @@ Engine_Kickbox : CroneEngine {
         out = 0,
         drum_comp_mix = 1,
         in_sidechain_mix= 1,
+        drum_sig_lvl = 0.5,
         drum_cntrl_lvl = 1,
+        in_sig_lvl = 1,
         // default to no sidechain makeup so it's more pronounced
         sidechain_makeup_amt = 0, // 0 is no makeup, 1 is normalized to 0-1
         sidechain_ratio = 0.5,
@@ -35,7 +37,7 @@ Engine_Kickbox : CroneEngine {
         comp_release = 0.1,
         comp_attack = 0.05;
 
-        var drum_sig, in_sig, comp_sig, sidechain_sig, out_sig;
+        var drum_sig, drum_ctrl, in_sig, comp_sig, sidechain_sig, out_sig;
         // Compute makeup amplitude to normalize compression curve to 0-1
         // (formula is actually thresh / slopeBelow, but slopeBelow is always 1)
         var sidechain_makeup = reciprocal(sidechain_thresh + ((1 - (sidechain_thresh)) * reciprocal(sidechain_ratio)));
@@ -44,10 +46,13 @@ Engine_Kickbox : CroneEngine {
         comp_makeup = 1 + ((comp_makeup - 1) * comp_makeup_amt);
 
         drum_sig = In.ar(drum_in, 2);
-        in_sig = In.ar(sig_in, 2);
+        drum_ctrl = drum_sig * drum_cntrl_lvl;
+        drum_sig = drum_sig.madd(drum_sig_lvl);
+        in_sig = In.ar(sig_in, 2).madd(in_sig_lvl);
+
         // TODO use custom env follower (rectify -> lpf) to get soft/hard knee compression
-        sidechain_sig = Compander.ar(in_sig, drum_sig * drum_cntrl_lvl, thresh: sidechain_thresh, slopeBelow: 1, slopeAbove: 1/sidechain_ratio, clampTime: sidechain_attack, relaxTime: sidechain_release, mul: sidechain_makeup);
-        comp_sig = Compander.ar(drum_sig, drum_sig * drum_cntrl_lvl, thresh: comp_thresh, slopeBelow: 1, slopeAbove: 1/comp_ratio, clampTime: comp_attack, relaxTime: comp_release, mul: comp_makeup);
+        sidechain_sig = Compander.ar(in_sig, drum_ctrl, thresh: sidechain_thresh, slopeBelow: 1, slopeAbove: 1/sidechain_ratio, clampTime: sidechain_attack, relaxTime: sidechain_release, mul: sidechain_makeup);
+        comp_sig = Compander.ar(drum_sig, drum_ctrl, thresh: comp_thresh, slopeBelow: 1, slopeAbove: 1/comp_ratio, clampTime: comp_attack, relaxTime: comp_release, mul: comp_makeup);
         out_sig = XFade2.ar(drum_sig, comp_sig, drum_comp_mix) + XFade2.ar(in_sig, sidechain_sig, in_sidechain_mix);
         // TODO find a good way to keep the mix of the two in -1 to 1, currently distorts too easily
         // Obligatory nornifying tanh softclip before out
@@ -108,7 +113,8 @@ Engine_Kickbox : CroneEngine {
       sin_shaper_amt = sin_shaper_amt max: 0.001;
       // sin_shaper_amt = -1 is tri, 1 is toward square
       // 2.2 is a fairly decent approximation of a sin (by experiment). 
-      sin_shaper_amt = 2.2*(2**((2*sin_shaper_amt)));
+      // sin_shaper_amt = 2.2*(2**((2*sin_shaper_amt)));
+      sin_shaper_amt = 2.2*sin_shaper_amt;
       sin_shaper_makeup = 1 / tanh(sin_shaper_amt);
       sin_osc = tri_osc.madd(sin_shaper_amt).tanh().madd(sin_shaper_makeup);
 
@@ -151,6 +157,8 @@ Engine_Kickbox : CroneEngine {
     glue_params = Dictionary.newFrom([
         \drum_comp_mix , 1,
         \in_sidechain_mix, 1,
+        \in_sig_lvl, 1,
+        \drum_sig_lvl, 0.5,
         \drum_cntrl_lvl , 1,
         \sidechain_makeup_amt , 0,
         \sidechain_ratio , 0.5,
