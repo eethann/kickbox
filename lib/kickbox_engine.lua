@@ -2,8 +2,9 @@ local Kickbox = {}
 local Formatters = require 'formatters'
 
 local specs = {
-	["freq"] = controlspec.new(20, 1000, "exp", 0, 44, "Hz"),
-	["mod_ratio"] = controlspec.new(0, 10, "lin", 0, 2, ""),
+  -- TODO should this just be a taper?
+	["freq"] = controlspec.new(10, 8000, "exp", 0, 44, "Hz"),
+	["mod_ratio"] = controlspec.new(0, 16, "lin", 0, 2, ""),
 	["amp"] = controlspec.new(0, 1, "lin", 0, 1, ""),
 	["sustain"] = controlspec.new(0, 1, "lin", 0, 0.33, ""),
 	["contour"] = controlspec.new(-5, 5, "lin", 0, -3, ""),
@@ -82,6 +83,10 @@ local glue_param_names = {
 }
 
 function Kickbox.add_params()
+  -- Check to see if params already exist
+  if params.lookup["kickbox_engine_freq"] then
+    return
+  end
   params:add_group("Kickbox Engine", #param_names + #glue_param_names + 2)
   params:add_separator("Drum")
   for i = 1,#param_names do
@@ -92,6 +97,7 @@ function Kickbox.add_params()
       name = p_name,
       controlspec = specs[p_name],
       action = function(x)
+        print(p_name)
         engine[p_name](x) 
       end
     }
@@ -109,7 +115,7 @@ function Kickbox.add_params()
       end
     }
   end
-  params:bang()
+  -- params:bang()
 end
 
 function Kickbox.trig(amp)

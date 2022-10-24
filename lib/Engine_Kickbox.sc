@@ -112,7 +112,7 @@ Engine_Kickbox : CroneEngine {
       // (use pre / post mult compensation for tri to sin fade)
       sin_shaper_amt = sin_shaper_amt max: 0.001;
       // sin_shaper_amt = -1 is tri, 1 is toward square
-      // 2.2 is a fairly decent approximation of a sin (by experiment). 
+      // 2.2 is a fairly decent approximation of a sin (by experiment).
       // sin_shaper_amt = 2.2*(2**((2*sin_shaper_amt)));
       sin_shaper_amt = 2.2*sin_shaper_amt;
       sin_shaper_makeup = 1 / tanh(sin_shaper_amt);
@@ -127,7 +127,7 @@ Engine_Kickbox : CroneEngine {
 
     }).add;
 
-    // should this be context.server.sync; ? 
+    // should this be context.server.sync; ?
 		Server.default.sync;
 
     glue = Synth.new(\kickbox_gluestick, target: context.xg, args: [\sig_in, context.in_b, \out, context.out_b, \drum_in, kick_bus], addAction: \addToTail);
@@ -172,21 +172,21 @@ Engine_Kickbox : CroneEngine {
         \comp_attack , 0.05;
     ]);
 
-    glue_params.keysDo({ arg key; 
+    glue_params.keysDo({ arg key;
       this.addCommand(key, "f", { arg msg;
         glue.set(key, msg[1]);
       })
     });
 
     params.keysDo({ arg key;
-			this.addCommand(key, "f", { arg msg;
+		this.addCommand(key, "f", { arg msg;
 				params[key] = msg[1];
 			});
-		});	
- 
- 		this.addCommand("trig", "f", { arg msg;
-			Synth.new(\kickbox_kick, args: params.getPairs ++ [\amp, msg[1], \out, kick_bus], target: sources_group)
 		});
+
+ 	this.addCommand("trig", "f", { arg msg;
+		Synth.new(\kickbox_kick, args: params.getPairs ++ [\amp, msg[1], \out, kick_bus], target: sources_group)
+	});
 
 	}
 
