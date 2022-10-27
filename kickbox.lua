@@ -17,7 +17,7 @@ function init()
   print("Initializing kickbox module params")
 
   local specs = {
-    ["div"] = controlspec.new(1, 8, "lin", 1, 2, ""),
+    ["div"] = controlspec.new(1, 8, "lin", 1, 4, ""),
     ["click_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
     ["click_mod_sweep"] = controlspec.new(0, 10, "lin", 0, 0, ""),
     ["click_mod_mod_sweep"] = controlspec.new(0, 10, "lin", 0, 0, ""),
@@ -128,13 +128,17 @@ end
 function seq_func()
   while true do
     local step = steps()
-    steps:step(step.length)
     local length = step.length * 1/(params:get("Kickbox_div") > 0 and params:get("Kickbox_div") or 1)
-    for i=1,step.subdiv do
-      if (step.state == 1) and (math.random() <= step.prob) then
-        kick_eng.trig(0.75 + (0.25 * step.accent))
+    screen_dirty = true
+    if (step.state == 1) and (math.random() <= step.prob) then
+      steps:step(step.length)
+      for i=1,step.subdiv do
+        kick_eng.trig(step.amp)
+        clock.sync(length / step.subdiv)
       end
-      clock.sync(length / step.subdiv)
+    else
+      steps:step(1)
+      clock.sync(length)
     end
   end
 end
@@ -163,24 +167,40 @@ end
 focus_step = 1
 ui_mode = 1
 
+keys_down = {}
 function key(n,z)
+  keys_down[n] = z
   if z == 1 then
-    if n == 3 then
-      toggle_seq()
-    elseif n == 2 then
-      steps[focus_step].state = 1 - steps[focus_step].state
+    if keys_down[2] == 1 then
+      if n == 3 then
+        toggle_seq()
+      end
+    else
+      if n == 3 then
+        steps[focus_step].state = 1 - steps[focus_step].state
+      end
     end
   end
   screen_dirty = true
 end
 
 function enc(e, d)
-  if e == 3 then
-    focus_step = util.wrap(focus_step + d, 1, steps.length)
-  elseif e ==2 then
-    steps[focus_step].subdiv = util.clamp(steps[focus_step].subdiv + d, 1, 16)  
-  elseif e == 1 then
-    steps[focus_step].length = util.clamp(steps[focus_step].length + d, 1, 16)  
+  if keys_down[2] == 1 then
+    if e == 1 then
+      -- focus_step = util.wrap(focus_step + d, 1, steps.length)
+    elseif e ==2 then
+      steps[focus_step].subdiv = util.clamp(steps[focus_step].subdiv + d, 1, 16)  
+    elseif e == 3 then
+      steps[focus_step].length = util.clamp(steps[focus_step].length + d, 1, 16)  
+    end
+  else
+    if e == 1 then
+      focus_step = util.wrap(focus_step + d, 1, steps.length)
+    elseif e ==2 then
+      steps[focus_step].amp = util.clamp(steps[focus_step].amp + (d / 10), 0, 1)  
+    elseif e == 3 then
+      steps[focus_step].prob = util.clamp(steps[focus_step].prob + (d / 10), 0, 1)  
+    end
   end
   screen_dirty = true
 end
@@ -195,12 +215,62 @@ function redraw_clock()
   end
 end
 
+function draw_grid(steps,x,y,w,h,focus_step)
+  local xd = w / steps.length
+  local x_pad = 1
+  local do_highlight = (1 + (focus_step - 1) % 8) == j
+  local cur_step_idx = steps.ix
+  
+  -- Ticks for each step
+  for i=1,steps.length do
+    screen.level((i == focus_step) and 15 or 4)
+    screen.rect(x+(i-1)*xd, y + h - 2, xd - x_pad, 1)
+    screen.fill()
+  end
+  -- Add bar for the duration of the current step (so it's always visible)
+  screen.rect(
+    x + (focus_step - 1) * xd, 
+    y + h, 
+    xd * steps[focus_step].length - x_pad,
+    2
+  )
+  -- Display bars for all currently active steps
+  -- TODO change depending on the current random play state
+  local j = 1
+  while j <= steps.length do
+    local cur_step = steps[j]
+    local h_ratio = cur_step.amp
+    local level = 10
+    level = level + ((j == cur_step_idx) and 4 or 0)
+    if cur_step.state == 1 then
+      screen.level(level)
+      screen.rect(x+(j-1)*xd, y + h - 5 , xd * cur_step.length - x_pad, 2)
+      screen.fill()
+    end
+    j = j + cur_step.length
+  end
+  -- TODO see if this can be merged with the above loop
+  for i=1,steps.length do
+    local cur_step = steps[i]
+    local h_ratio = cur_step.amp
+    local level = 2
+    level = level + ((cur_step.state == 1) and 10 or 0)
+    level = level + ((j == cur_step_idx) and 4 or 0)
+    screen.level(level)
+    screen.rect(x+(i-1)*xd, y + (h - 5) * (1 - h_ratio), xd - x_pad, (h - 5) * h_ratio)
+    screen.fill()
+  end
+end
+
 function redraw()
   if screen_dirty then
     screen.clear()
+    if (steps and steps.length > 0) then
+      draw_grid(steps, 10, 4, 108, 20, focus_step)
+    end
     screen.move(64,32)
     if focus_step > 0 then
-      screen.text(focus_step .. ": " .. steps[focus_step].state .. "(" .. steps[focus_step].length .. "/" .. steps[focus_step].subdiv .. ")")
+      screen.text(focus_step .. "(" .. steps[focus_step].prob .. "): " .. steps[focus_step].state .. "(" .. steps[focus_step].length .. "/" .. steps[focus_step].subdiv .. ")")
     end
     screen.update()
   end
