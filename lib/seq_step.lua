@@ -4,6 +4,7 @@ local Seq_Step = {
   prob = 1,
   length = 1, -- length of this step, will advance next step to t+val
   subdiv = 1, -- how many repeats should be played within the length (repeat len = len/subdiv)
+  amp = 1,
   accent = 0
 }
 
