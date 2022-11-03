@@ -119,7 +119,8 @@ Engine_Kickbox : CroneEngine {
       sin_osc = tri_osc.madd(sin_shaper_amt).tanh().madd(sin_shaper_makeup);
 
       // TODO compensate for potential >1 overloading (* 0.5 for all?)
-      out_sig = ((sin_osc * contour_env) + (mod_osc * body_mod_amp * body_env)) * amp;
+      // TODO determine if just using DB is better, this is using a logarithmic 0-1 scale
+      out_sig = ((sin_osc * contour_env) + (mod_osc * body_mod_amp * body_env)) * (10 ** (10 * (1 - amp));
       Out.ar(out,[out_sig,out_sig]);
 
       // Free when all envs are done
