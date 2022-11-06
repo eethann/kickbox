@@ -120,7 +120,7 @@ Engine_Kickbox : CroneEngine {
 
       // TODO compensate for potential >1 overloading (* 0.5 for all?)
       // TODO determine if just using DB is better, this is using a logarithmic 0-1 scale
-      out_sig = ((sin_osc * contour_env) + (mod_osc * body_mod_amp * body_env)) * (10 ** (10 * (1 - amp));
+      out_sig = ((sin_osc * contour_env) + (mod_osc * body_mod_amp * body_env)) * (10 ** (amp - 1));
       Out.ar(out,[out_sig,out_sig]);
 
       // Free when all envs are done
