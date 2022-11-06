@@ -10,9 +10,8 @@ UI = require("ui")
 
 engine.name = 'Kickbox'
 kick_eng = include('kickbox/lib/kickbox_engine')
-Seq_Step = include("kickbox/lib/seq_step")
-s = require 'sequins'
-steps = {}
+Track = include("kickbox/lib/seq_step")
+
 dials = {}
 current_step = 1
 
@@ -56,7 +55,6 @@ function init()
     "div",
   }
 
-
   for i = 1,#param_names do
     local p_name = param_names[i]
     params:add{
@@ -69,9 +67,10 @@ function init()
 
   init_dials()
 
-  -- probs = s{1, s{1, 0.25, 0.75, 0.125, .5} } 
   print("Making sequencer steps")
-  steps = s(Seq_Step.steps(16, default_param_vals))
+  track = Track:new(16, default_param_vals)
+
+  -- steps = s(Seq_Step.steps(16, default_param_vals))
   print("starting redraw clock")
   redraw_clock_id = clock.run(redraw_clock)
   print("Starting kickbox sequencer")
@@ -101,12 +100,12 @@ end
 
 function seq_func()
   while true do
-    local step = steps()
+    local step = track.seq()
     -- FIXME this should move into the loop so it can be updated mid-step / mid-repeat cycle
     local step_length = 1/(params:get("Kickbox_div") > 0 and params:get("Kickbox_div") or 1)
     local length = 1
-    for i=steps.ix+1,steps.length do
-      if steps[i].tie == 1 then
+    for i=track.seq.ix+1,track.seq.length do
+      if track.seq[i].tie == 1 then
         length = length + 1
       else
         break
@@ -114,39 +113,39 @@ function seq_func()
     end
     if (step.state == 1) and (math.random() <= step.prob) then
       -- plan to pick back up at the next un-tied step
-      steps:step(length)
+      track.seq:step(length)
       local inc_steps = 0
       local repeat_ix = 0 -- this gets init'd on first loop
       local repeat_steps = step.period > 0 and (step.period / step.subdiv) or length
       local amp = step.amp
       -- TODO add acceleration / deceleration
       repeat
-        if ((steps.ix + math.floor(inc_steps)) > repeat_ix) then
-          repeat_ix = steps.ix + math.floor(inc_steps)
-          if (steps[repeat_ix].state == 1) and (math.random() <= steps[repeat_ix].prob) then
-            if steps[repeat_ix].period > 0 then
-              repeat_steps = steps[repeat_ix].period / steps[repeat_ix].subdiv
+        if ((track.seq.ix + math.floor(inc_steps)) > repeat_ix) then
+          repeat_ix = track.seq.ix + math.floor(inc_steps)
+          if (track.seq[repeat_ix].state == 1) and (math.random() <= track.seq[repeat_ix].prob) then
+            if track.seq[repeat_ix].period > 0 then
+              repeat_steps = track.seq[repeat_ix].period / track.seq[repeat_ix].subdiv
             end
             -- TODO also apply other param locks from this step
             for i=1,#ui_params do
-              params:set_raw("kickbox_engine_" .. ui_params[i], steps[repeat_ix]:get_param_val(ui_params[i]))
+              params:set_raw("kickbox_engine_" .. ui_params[i], track.seq[repeat_ix]:get_param_val(ui_params[i]))
             end
-            amp = steps[repeat_ix].amp
+            amp = track.seq[repeat_ix].amp
           end
         end
         kick_eng.trig(amp)
         -- Either the repeat length, or the amount of time till the next non-tie fires
-        -- We need to use clock.sleep because we want this note to start anywhere, not just on a grid of repeat_steps
-        current_step = steps.ix + inc_steps
+        -- We need to use clock.sleep because we want this note to start anywhere, not just on a grid of repeat_track.seq
+        current_step = track.seq.ix + inc_steps
         screen_dirty = true
         clock.sleep(math.min(repeat_steps, length - inc_steps) * step_length * clock.get_beat_sec())
         inc_steps = inc_steps + repeat_steps
       screen_dirty = true
       until inc_steps >= length
     else
-      current_step = steps.ix
+      current_step = track.seq.ix
       screen_dirty = true
-      steps:step(1)
+      track.seq:step(1)
       clock.sync(step_length)
     end
   end
@@ -182,13 +181,13 @@ function key(n,z)
   if z == 1 then
     if keys_down[2] == 1 then
       if n == 3 then
-        steps[focus_step]:toggle_tie()
+        track.seq[focus_step]:toggle_tie()
       elseif n == 1 then
         toggle_seq()
       end
     else
       if n == 3 then
-        steps[focus_step].state = 1 - steps[focus_step].state
+        track.seq[focus_step].state = 1 - track.seq[focus_step].state
       end
     end
   end
@@ -199,24 +198,24 @@ function enc(e, d)
   if keys_down[2] == 1 then
     if e == 1 then
       if d > 0 then
-        steps[focus_step]:lock(focus_dial_name, default_param_vals)
-        dials[focus_dial_num]:set_value(steps[focus_step].params[focus_dial_name])
+        track.seq[focus_step]:lock(focus_dial_name, default_param_vals)
+        dials[focus_dial_num]:set_value(track.seq[focus_step].params[focus_dial_name])
       elseif d < 0 then
-        steps[focus_step]:unlock(focus_dial_name)
+        track.seq[focus_step]:unlock(focus_dial_name)
         dials[focus_dial_num]:set_value(default_param_vals[focus_dial_name])
       end
     elseif e ==2 then
-      steps[focus_step].period = util.clamp(steps[focus_step].period + d, 1, 16)  
+      track.seq[focus_step].period = util.clamp(track.seq[focus_step].period + d, 1, 16)  
     elseif e == 3 then
-      steps[focus_step].subdiv = util.clamp(steps[focus_step].subdiv + d, 1, 16)  
+      track.seq[focus_step].subdiv = util.clamp(track.seq[focus_step].subdiv + d, 1, 16)  
     end
   else
     if e == 1 then
-      focus_step = util.wrap(focus_step + d, 1, steps.length)
-      dials[focus_dial_num]:set_value(steps[focus_step]:get_param_val(focus_dial_name))
+      focus_step = util.wrap(focus_step + d, 1, track.seq.length)
+      dials[focus_dial_num]:set_value(track.seq[focus_step]:get_param_val(focus_dial_name))
     elseif e ==2 then
       -- TODO move prob elsewhere
-      -- steps[focus_step].prob = util.clamp(steps[focus_step].prob + (d / 10), 0, 1)  
+      -- track.seq[focus_step].prob = util.clamp(track.seq[focus_step].prob + (d / 10), 0, 1)  
       dials[focus_dial_num].active = false
       focus_dial_num = util.clamp(focus_dial_num + d, 1, 8)
       focus_dial_name = ui_params[focus_dial_num]
@@ -224,11 +223,11 @@ function enc(e, d)
     elseif e == 3 then
       -- TODO
       if focus_dial_num == 1 then
-        steps[focus_step].amp = util.clamp(steps[focus_step].amp + (d / 64), 0, 1)  
+        track.seq[focus_step].amp = util.clamp(track.seq[focus_step].amp + (d / 64), 0, 1)  
       else 
         -- TODO use delta coeficient = to param step val
         dials[focus_dial_num]:set_value_delta(d * 1/64)
-        steps[focus_step]:set_param_val(focus_dial_name, dials[focus_dial_num].value)
+        track.seq[focus_step]:set_param_val(focus_dial_name, dials[focus_dial_num].value)
       end
     end
   end
@@ -299,12 +298,12 @@ end
 function redraw()
   if screen_dirty then
     screen.clear()
-    if (steps and steps.length > 0) then
-      draw_grid(steps, 10, 4, 108, 20, focus_step)
+    if (track.seq and track.seq.length > 0) then
+      draw_grid(track.seq, 10, 4, 108, 20, focus_step)
     end
     for i=1,#dials do
       dials[i]:redraw()
-      if (steps[focus_step].locks[ui_params[i]] == 1) then
+      if (track.seq[focus_step].locks[ui_params[i]] == 1) then
         screen.blend_mode(1)
         -- screen.level(4)
         screen.rect(6 + 32 * math.floor((i-1)/2), 28 + 20 * ((i-1)%2), 16, 16) 
@@ -316,7 +315,7 @@ function redraw()
     screen.move(64,32)
     if focus_step > 0 then
       -- TODO compute length from # of ties following
-      screen.text(focus_step .. "(" .. steps[focus_step].prob .. "): " .. steps[focus_step].state .. "(" .. steps[focus_step].period .. "/".. steps[focus_step].subdiv .. ")")
+      screen.text(focus_step .. "(" .. track.seq[focus_step].prob .. "): " .. track.seq[focus_step].state .. "(" .. track.seq[focus_step].period .. "/".. track.seq[focus_step].subdiv .. ")")
     end
     screen.update()
   end
