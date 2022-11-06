@@ -16,21 +16,25 @@ steps = {}
 dials = {}
 current_step = 1
 
+-- TODO refactor these into an instrument object
 -- TODO redo these to use the macro params
 -- TODO move sequence state to its own obj
 ui_params = {"amp", "sustain", "freq", "click_sweep", "mod_index", "mod_ratio", "mod_feedback", "sin_shaper_amt" }
 ui_param_labels = {"amp", "sus", "freq", "click", "indx", "rtio", "fdbk", "shpr"}
+
+-- We use raw 0-1 for all values, set via param:set_raw and scaled automatically that way
 default_param_vals = {
   amp = 1,
   sustain = 0.3,
-  freq = 44,
-  click_sweep = 1,
+  freq = util.explin(10,8000,0,1,44),
+  click_sweep = util.linlin(0,10,0,1,1),
   mod_index = 0,
-  mod_ratio = 2,
+  mod_ratio = util.linlin(0,16,0,1,2),
   mod_feedback = 0,
-  sin_shaper_amt = 1
+  sin_shaper_amt = util.linlin(0,4,0,1,1)
 }
-focus_dial = 1
+focus_dial_num = 1
+focus_dial_name = ui_params[focus_dial_num]
 
 local probs
 
@@ -44,64 +48,14 @@ function init()
   params:add_separator("Kickbox")
   kick_eng.add_params()
   
-  print("Initializing kickbox module params")
-
   local specs = {
     ["div"] = controlspec.new(1, 8, "lin", 1, 4, ""),
-    ["click_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["click_mod_sweep"] = controlspec.new(0, 10, "lin", 0, 0, ""),
-    ["click_mod_mod_sweep"] = controlspec.new(0, 10, "lin", 0, 0, ""),
-    ["click_mod_feedback"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["click_mod_index"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-
-    ["body_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    -- TODO add body for direct out amp env for modulator
-    ["body_mod_index"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["body_mod_feedback"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-
-    ["fm_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["fm_base_ratio"] = controlspec.new(0, 8, "lin", 0, 0, ""),
-    ["fm_mod_ratio"] = controlspec.new(0, 8, "lin", 0, 0, ""),
-    ["fm_mod_index"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["fm_mod_feedback"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-
-    ["env_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["env_base_curve"] = controlspec.new(-5, 5, "lin", 0, 3, ""), -- bipolar
-    ["env_base_sustain"] = controlspec.new(0, 2, "lin", 0, 0.5, ""),
-    ["env_mod_curve"] = controlspec.new(-5, 5, "lin", 0, 0, ""), -- bipolar
-    ["env_mod_sustain"] = controlspec.new(-2, 2, "lin", 0, 0, ""), -- bipolar
-
-    ["pitch_mod_amt"] = controlspec.new(0, 1, "lin", 0, 0, ""),
-    ["pitch_base_note"] = controlspec.new(0, 127, "lin", 1, 0, ""),
-    ["pitch_base_hz"] = controlspec.new(0, 100, "exp", 0, 36, "Hz"),
-    ["pitch_mod_mult"] = controlspec.new(0, 4, "lin", 0.1, 0, "")
   }
 
   local param_names = {
     "div",
-    "click_mod_amt",
-    "body_mod_amt",
-    "fm_mod_amt",
-    "env_mod_amt",
-    "pitch_mod_amt",
-    "click_mod_sweep",
-    "click_mod_mod_sweep",
-    "click_mod_feedback",
-    "click_mod_index",
-    "body_mod_index",
-    "body_mod_feedback",
-    "fm_base_ratio",
-    "fm_mod_ratio",
-    "fm_mod_index",
-    "fm_mod_feedback",
-    "env_base_curve", -- bipolar
-    "env_base_sustain",
-    "env_mod_curve", -- bipolar
-    "env_mod_sustain", -- bipolar
-    "pitch_base_note",
-    "pitch_base_hz",
-    "pitch_mod_mult"
   }
+
 
   for i = 1,#param_names do
     local p_name = param_names[i]
@@ -113,42 +67,11 @@ function init()
     }
   end
 
-  local update_scaled_base_param = function(dest, source, base, scale) 
-    params:set(dest, params:get(base) + (params:get(source) * params:get(scale)))
-  end
-
-  local update_scaled_param = function(dest, source, scale) 
-    params:set(dest, params:get(source) * params:get(scale))
-  end
-
-  params:set_action("Kickbox_click_mod_amt", function(click_amt)
-    update_scaled_param("kickbox_engine_mod_sweep_amt", "Kickbox_click_mod_mod_sweep", "Kickbox_click_mod_amt")
-    update_scaled_param("kickbox_engine_click_sweep", "Kickbox_click_mod_sweep", "Kickbox_click_mod_amt")
-    update_scaled_param("kickbox_engine_click_index", "Kickbox_click_mod_index", "Kickbox_click_mod_amt")
-    update_scaled_param("kickbox_engine_click_feedback", "Kickbox_click_mod_feedback", "Kickbox_click_mod_amt")
-  end)
-
-  params:set_action("Kickbox_click_mod_mod_sweep", function(val)
-    update_scaled_param("kickbox_engine_mod_sweep_amt", "Kickbox_click_mod_mod_sweep", "Kickbox_click_mod_amt")
-  end)
-
-  params:set_action("Kickbox_click_mod_sweep", function(val)
-    update_scaled_param("kickbox_engine_click_sweep", "Kickbox_click_mod_sweep", "Kickbox_click_mod_amt")
-  end)
-
-  params:set_action("Kickbox_click_mod_index", function(val)
-    update_scaled_param("kickbox_engine_click_index", "Kickbox_click_mod_index", "Kickbox_click_mod_amt")
-  end)
-
-  params:set_action("Kickbox_click_mod_feedback", function(val)
-    update_scaled_param("kickbox_engine_click_feedback", "Kickbox_click_mod_feedback", "Kickbox_click_mod_amt")
-  end)
-
   init_dials()
 
   -- probs = s{1, s{1, 0.25, 0.75, 0.125, .5} } 
   print("Making sequencer steps")
-  steps = s(Seq_Step.steps(16))
+  steps = s(Seq_Step.steps(16, default_param_vals))
   print("starting redraw clock")
   redraw_clock_id = clock.run(redraw_clock)
   print("Starting kickbox sequencer")
@@ -160,18 +83,17 @@ function init_dials()
   screen.aa(1) -- provides smoother screen drawing
   -- UI.Dial.new (x, y, size, value, min_value, max_value, rounding, start_value, markers, units, title)
   for i=1,#ui_params do
-    local range = params:get_range("kickbox_engine_" .. ui_params[i])
+    -- local range = params:get_range("kickbox_engine_" .. ui_params[i])
     -- TODO get actual quant from param for rounding
     dials[i] = UI.Dial.new(
       10 + 32 * math.floor((i-1)/2), 30 + 20 * ((i-1)%2), 
     8, 
       default_param_vals[ui_params[i]], 
-      range[1], range[2], 
-      0.1, 
-      range[1],
+      0, 1, 1 / 256 ,
+      0,
       {}, "", 
       ui_param_labels[i])
-    if i > focus_dial then
+    if i ~= focus_dial_num then
       dials[i].active = false
     end
   end
@@ -194,13 +116,9 @@ function seq_func()
       -- plan to pick back up at the next un-tied step
       steps:step(length)
       local inc_steps = 0
-      local repeat_ix = steps.ix
+      local repeat_ix = 0 -- this gets init'd on first loop
       local repeat_steps = step.period > 0 and (step.period / step.subdiv) or length
       local amp = step.amp
-      -- TODO add step overrides if present
-      for i=1,#ui_params do
-        params:set("kickbox_engine_" .. ui_params[i], default_param_vals[ui_params[i]])
-      end
       -- TODO add acceleration / deceleration
       repeat
         if ((steps.ix + math.floor(inc_steps)) > repeat_ix) then
@@ -210,6 +128,9 @@ function seq_func()
               repeat_steps = steps[repeat_ix].period / steps[repeat_ix].subdiv
             end
             -- TODO also apply other param locks from this step
+            for i=1,#ui_params do
+              params:set_raw("kickbox_engine_" .. ui_params[i], steps[repeat_ix]:get_param_val(ui_params[i]))
+            end
             amp = steps[repeat_ix].amp
           end
         end
@@ -261,7 +182,7 @@ function key(n,z)
   if z == 1 then
     if keys_down[2] == 1 then
       if n == 3 then
-        steps[focus_step].tie = int_not(steps[focus_step].tie)
+        steps[focus_step]:toggle_tie()
       elseif n == 1 then
         toggle_seq()
       end
@@ -277,7 +198,13 @@ end
 function enc(e, d)
   if keys_down[2] == 1 then
     if e == 1 then
-      -- TODO implement focus on different UI zones
+      if d > 0 then
+        steps[focus_step]:lock(focus_dial_name, default_param_vals)
+        dials[focus_dial_num]:set_value(steps[focus_step].params[focus_dial_name])
+      elseif d < 0 then
+        steps[focus_step]:unlock(focus_dial_name)
+        dials[focus_dial_num]:set_value(default_param_vals[focus_dial_name])
+      end
     elseif e ==2 then
       steps[focus_step].period = util.clamp(steps[focus_step].period + d, 1, 16)  
     elseif e == 3 then
@@ -286,21 +213,22 @@ function enc(e, d)
   else
     if e == 1 then
       focus_step = util.wrap(focus_step + d, 1, steps.length)
+      dials[focus_dial_num]:set_value(steps[focus_step]:get_param_val(focus_dial_name))
     elseif e ==2 then
       -- TODO move prob elsewhere
       -- steps[focus_step].prob = util.clamp(steps[focus_step].prob + (d / 10), 0, 1)  
-      dials[focus_dial].active = false
-      focus_dial = util.clamp(focus_dial + d, 1, 8)
-      dials[focus_dial].active = true
+      dials[focus_dial_num].active = false
+      focus_dial_num = util.clamp(focus_dial_num + d, 1, 8)
+      focus_dial_name = ui_params[focus_dial_num]
+      dials[focus_dial_num].active = true
     elseif e == 3 then
       -- TODO
-      if focus_dial == 1 then
-        steps[focus_step].amp = util.clamp(steps[focus_step].amp + (d / 10), 0, 1)  
+      if focus_dial_num == 1 then
+        steps[focus_step].amp = util.clamp(steps[focus_step].amp + (d / 64), 0, 1)  
       else 
         -- TODO use delta coeficient = to param step val
-        local d_coef = (focus_dial == 3) and 100 or 0.1
-        dials[focus_dial]:set_value_delta(d * d_coef)
-        default_param_vals[ui_params[focus_dial]] = dials[focus_dial].value
+        dials[focus_dial_num]:set_value_delta(d * 1/64)
+        steps[focus_step]:set_param_val(focus_dial_name, dials[focus_dial_num].value)
       end
     end
   end
@@ -376,6 +304,14 @@ function redraw()
     end
     for i=1,#dials do
       dials[i]:redraw()
+      if (steps[focus_step].locks[ui_params[i]] == 1) then
+        screen.blend_mode(1)
+        -- screen.level(4)
+        screen.rect(6 + 32 * math.floor((i-1)/2), 28 + 20 * ((i-1)%2), 16, 16) 
+        screen.fill()
+        -- screen.level(15)
+        screen.blend_mode(0)
+      end
     end
     screen.move(64,32)
     if focus_step > 0 then
